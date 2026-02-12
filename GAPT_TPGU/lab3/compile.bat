@@ -1,0 +1,1 @@
+nvcc -ptx -Xptxas=-v matrix_mul_spill.cu -o matrix_mul_spill.ptx
