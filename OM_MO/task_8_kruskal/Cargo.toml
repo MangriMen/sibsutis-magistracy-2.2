@@ -1,0 +1,6 @@
+[package]
+name = "task_8_kruskal"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
