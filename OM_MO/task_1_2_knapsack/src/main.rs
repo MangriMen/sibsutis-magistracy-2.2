@@ -1,4 +1,5 @@
 use crate::knapsack::Item;
+use std::collections::HashMap; // Import HashMap for counting
 
 fn main() {
     let items = vec![
@@ -16,25 +17,24 @@ fn main() {
         },
     ];
 
-    let capacity = 13;
+    let capacity = 3_000_000;
 
     println!("Items: {items:#?}");
 
     let (unbounded_val, unbounded_items) = knapsack::unbounded(capacity, &items);
-    let (zero_one_val, zero_one_items) = knapsack::zero_one(capacity, &items);
 
     println!("\n--- Unbounded Knapsack ---");
     println!("Maximum value: {}", unbounded_val);
-    println!("Used items:",);
-    for i in unbounded_items {
-        println!("{i}: {:?}", items[i]);
+
+    // Group and count items
+    let mut counts = HashMap::new();
+    for &idx in &unbounded_items {
+        *counts.entry(idx).or_insert(0) += 1;
     }
 
-    println!("\n--- (0/1) Knapsack ---");
-    println!("Maximum value: {}", zero_one_val);
-    println!("Used items");
-    for i in zero_one_items {
-        println!("{i}: {:?}", items[i]);
+    println!("Used items (index: count):");
+    for (idx, count) in counts {
+        println!("Item {}: {:?} (Quantity: {})", idx, items[idx], count);
     }
 }
 
@@ -47,7 +47,6 @@ mod knapsack {
 
     pub fn unbounded(capacity: usize, items: &[Item]) -> (u32, Vec<usize>) {
         let mut dp = vec![0; capacity + 1];
-        // stores the index of the item used to reach this weight
         let mut item_at_weight = vec![None; capacity + 1];
 
         for i in 1..=capacity {
@@ -59,43 +58,18 @@ mod knapsack {
             }
         }
 
-        // Backtrack to find which items were used
         let mut picked_items = Vec::new();
         let mut curr_w = capacity;
+        // Optimization: Find actual used capacity to start backtracking
+        while curr_w > 0 && item_at_weight[curr_w].is_none() {
+            curr_w -= 1;
+        }
+
         while let Some(idx) = item_at_weight[curr_w] {
             picked_items.push(idx);
             curr_w -= items[idx].weight;
         }
 
         (dp[capacity], picked_items)
-    }
-
-    pub fn zero_one(capacity: usize, items: &[Item]) -> (u32, Vec<usize>) {
-        let n = items.len();
-        // dp[i] stores the maximum value for capacity i
-        let mut dp = vec![vec![0; capacity + 1]; n + 1];
-
-        for i in 1..=n {
-            let item = &items[i - 1];
-            for w in 0..=capacity {
-                if item.weight <= w {
-                    dp[i][w] = dp[i - 1][w].max(dp[i - 1][w - item.weight] + item.value);
-                } else {
-                    dp[i][w] = dp[i - 1][w];
-                }
-            }
-        }
-
-        let mut picked_items = Vec::new();
-        let mut curr_w = capacity;
-        for i in (1..=n).rev() {
-            // If the value changed compared to the previous row, the item was taken
-            if dp[i][curr_w] != dp[i - 1][curr_w] {
-                picked_items.push(i - 1);
-                curr_w -= items[i - 1].weight;
-            }
-        }
-
-        (dp[n][capacity], picked_items)
     }
 }

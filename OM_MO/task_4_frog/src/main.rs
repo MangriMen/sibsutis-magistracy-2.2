@@ -4,12 +4,15 @@ type FrogState = (usize, usize); // (current_index, jump_length)
 type PathData = (i32, usize, usize); // (min_steps, from_index, previous_jump)
 
 fn main() {
-    let stones = vec![1, 1, 0, 1, 1, 1, 0, 0, 1];
+    let stones = vec![1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1];
 
     match frog_jumps(&stones) {
-        Some((count, path)) => {
+        Some((count, path, dp)) => {
             println!("Minimum number of jumps: {}", count);
-            println!("Path by indices: {:?}", path);
+            println!("Path by indices: {:?}\n", path);
+
+            // Print DP table as a matrix
+            print_matrix(&stones, &dp);
         }
         None => {
             println!("Path is impossible");
@@ -17,12 +20,36 @@ fn main() {
     }
 }
 
-fn frog_jumps(stones: &[i32]) -> Option<(i32, Vec<usize>)> {
+fn print_matrix(stones: &[i32], dp: &HashMap<FrogState, PathData>) {
     let n = stones.len();
+    // Find maximum jump length to define matrix width
+    let max_jump = dp.keys().map(|&(_, k)| k).max().unwrap_or(0);
 
+    println!("DP Matrix (Rows: Stone Index, Cols: Jump Length)");
+    print!("Idx | Stone |");
+    for k in 1..=max_jump {
+        print!(" k={:<2} |", k);
+    }
+    println!("\n----|-------|{}", "------|".repeat(max_jump));
+
+    for i in 0..n {
+        print!("{:<3} |   {}   |", i, stones[i]);
+        for k in 1..=max_jump {
+            if let Some(&(steps, _, _)) = dp.get(&(i, k)) {
+                print!("  {:<2}  |", steps);
+            } else {
+                print!("  -   |");
+            }
+        }
+        println!();
+    }
+}
+
+fn frog_jumps(stones: &[i32]) -> Option<(i32, Vec<usize>, HashMap<FrogState, PathData>)> {
+    let n = stones.len();
     let mut dp: HashMap<FrogState, PathData> = HashMap::new();
 
-    // starting condition: jump to stone 1 has length 1.
+    // Initial state
     if n > 1 && stones[1] == 1 {
         dp.insert((1, 1), (1, 0, 0));
     } else {
@@ -81,7 +108,7 @@ fn frog_jumps(stones: &[i32]) -> Option<(i32, Vec<usize>)> {
         }
 
         path.reverse();
-        Some((total_steps, path))
+        Some((total_steps, path, dp))
     } else {
         None
     }
