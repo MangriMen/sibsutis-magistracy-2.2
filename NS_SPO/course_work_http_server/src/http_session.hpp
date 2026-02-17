@@ -3,6 +3,7 @@
 #include "http_response.hpp"
 #include "http_status.hpp"
 #include "mime_types.hpp"
+#include "range.hpp"
 #include <asio.hpp>
 #include <filesystem>
 #include <fstream>
@@ -60,18 +61,29 @@ private:
         // Parse header
         std::stringstream ss(data);
 
+        std::string line;
+
         std::string method, path, protocol;
 
         ss >> method >> path >> protocol;
 
+        std::getline(ss, line); // Read to line end
+
+        std::string range_header;
+        while (std::getline(ss, line) && line != "\r") {
+            if (line.find("Range: ") == 0) {
+                range_header = line;
+            }
+        }
+
         if (method == "GET") {
-            send_response(path);
+            send_response(path, range_header);
         } else {
             send_error(HttpStatus::MethodNotAllowed);
         }
     }
 
-    void send_response(const std::string& http_path)
+    void send_response(const std::string& http_path, const std::string& range_header)
     {
         auto self = shared_from_this();
 
@@ -104,16 +116,37 @@ private:
             return;
         }
 
+        long long file_size = std::filesystem::file_size(full_path);
+        long long start = 0, end = file_size - 1;
+        bool is_partial = false;
+
+        if (!range_header.empty()) {
+            auto [r_start, r_end] = parse_range(range_header, file_size);
+            start = r_start;
+            if (r_end > 0)
+                end = r_end;
+            is_partial = true;
+        }
+
         std::ifstream file(full_path, std::ios::binary);
         if (!file) {
             send_error(HttpStatus::InternalServerError);
             return;
         }
+        file.seekg(start);
 
-        // Read file contents
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        long long length = end - start + 1;
+        std::string content(length, '\0');
+        file.read(&content[0], length);
 
-        HttpResponse response(HttpStatus::OK);
+        HttpResponse response(is_partial ? HttpStatus::PartialContent : HttpStatus::OK);
+
+        if (is_partial) {
+            std::string content_range = "bytes " + std::to_string(start) + "-" + std::to_string(end) + "/" + std::to_string(file_size);
+            response.add_header("Content-Range", content_range);
+        }
+
+        response.add_header("Accept-Ranges", "bytes");
         response.add_header("Connection", "close");
 
         std::string ext = full_path.extension().string();
